@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#07090e">
   <title>SafeGuard AI - Real-Time Helmet Compliance Detection</title>
   <meta name="description" content="AI-Powered real-time helmet and safety compliance detection using YOLOv8 & ONNX. Deployable on Vercel with live camera feed.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -104,12 +107,20 @@
               </svg>
               <span>Stop</span>
             </button>
-            <select class="select-input" id="cameraSelect">
-              <option value="">Default Camera</option>
-            </select>
           </div>
 
           <div class="tool-right">
+            <select class="select-input" id="cameraSelect">
+              <option value="">Default Camera</option>
+            </select>
+            <button class="btn btn-icon-only" id="flipCamBtn" title="Flip Camera (Front/Rear)">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 10c0-4.42-3.58-8-8-8s-8 3.58-8 8c0 3.58 2.37 6.61 5.67 7.61"/>
+                <polyline points="20 14 20 10 16 10"/>
+                <path d="M4 14c0 4.42 3.58 8 8 8s8-3.58 8-8c0-3.58-2.37-6.61-5.67-7.61"/>
+                <polyline points="4 10 4 14 8 14"/>
+              </svg>
+            </button>
             <button class="btn btn-icon-only" id="audioToggleBtn" title="Toggle Audio Alarm">
               <svg id="audioIconOn" class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>

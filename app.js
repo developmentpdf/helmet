@@ -22,6 +22,7 @@ const state = {
     fps: 0,
   },
   audioCtx: null,
+  facingMode: 'user',
 };
 
 // DOM References
@@ -40,6 +41,7 @@ const DOM = {
   loaderSubtitle: document.getElementById('loaderSubtitle'),
   startCamBtn: document.getElementById('startCamBtn'),
   stopCamBtn: document.getElementById('stopCamBtn'),
+  flipCamBtn: document.getElementById('flipCamBtn'),
   cameraSelect: document.getElementById('cameraSelect'),
   audioToggleBtn: document.getElementById('audioToggleBtn'),
   audioIconOn: document.getElementById('audioIconOn'),
@@ -232,9 +234,33 @@ function handleCameraError(err) {
   setStatus('STANDBY', 'CAMERA ACCESS ERROR');
 }
 
-async function startCamera(deviceId = null) {
+function adaptViewportToVideo(w, h) {
+  if (!w || !h || !DOM.viewportContainer) return;
+  if (h > w) {
+    DOM.viewportContainer.classList.add('portrait-mode');
+    DOM.viewportContainer.classList.remove('landscape-mode');
+  } else {
+    DOM.viewportContainer.classList.add('landscape-mode');
+    DOM.viewportContainer.classList.remove('portrait-mode');
+  }
+  DOM.viewportContainer.style.aspectRatio = `${w} / ${h}`;
+}
+
+async function flipCamera() {
+  state.facingMode = state.facingMode === 'user' ? 'environment' : 'user';
+  if (state.isStreaming) {
+    await startCamera(null, state.facingMode);
+  } else {
+    await startCamera(null, state.facingMode);
+  }
+}
+
+async function startCamera(deviceId = null, facingMode = null) {
   initAudio();
   if (state.isStreaming) stopCamera();
+
+  const targetFacing = facingMode || state.facingMode || 'user';
+  state.facingMode = targetFacing;
 
   const constraints = {
     audio: false,
@@ -242,7 +268,7 @@ async function startCamera(deviceId = null) {
       width: { ideal: 1280 },
       height: { ideal: 720 },
       deviceId: deviceId ? { exact: deviceId } : undefined,
-      facingMode: deviceId ? undefined : 'user',
+      facingMode: deviceId ? undefined : { ideal: targetFacing },
     },
   };
 
@@ -275,9 +301,12 @@ async function startCamera(deviceId = null) {
     DOM.stopCamBtn.disabled = false;
     DOM.viewportContainer.classList.add('scanning-active');
 
-    // Sync Canvas Size
-    DOM.canvas.width = DOM.video.videoWidth || 640;
-    DOM.canvas.height = DOM.video.videoHeight || 480;
+    // Sync Canvas Size & Adapt Viewport to Camera Resolution
+    const vW = DOM.video.videoWidth || 640;
+    const vH = DOM.video.videoHeight || 480;
+    DOM.canvas.width = vW;
+    DOM.canvas.height = vH;
+    adaptViewportToVideo(vW, vH);
 
     setStatus('STANDBY', 'CAMERA ACTIVE: SCANNING...');
     requestAnimationFrame(renderLoop);
@@ -296,16 +325,35 @@ function stopCamera() {
   DOM.startCamBtn.disabled = false;
   DOM.stopCamBtn.disabled = true;
   DOM.viewportContainer.classList.remove('scanning-active');
+  if (DOM.viewportContainer) {
+    DOM.viewportContainer.style.aspectRatio = '';
+    DOM.viewportContainer.classList.remove('portrait-mode', 'landscape-mode');
+  }
   setStatus('STANDBY', 'CAMERA STANDBY');
 }
 
 /**
- * 4. Image Preprocessing for YOLOv8 (224x224 RGB Float32 Tensor)
+ * 4. Image Preprocessing for YOLOv8 (224x224 RGB Float32 Tensor with LetterBox)
  */
 function createInputTensor(imageSource) {
-  offscreenCtx.drawImage(imageSource, 0, 0, 224, 224);
-  const imgData = offscreenCtx.getImageData(0, 0, 224, 224).data;
+  const srcW = imageSource.videoWidth || imageSource.naturalWidth || imageSource.width || 640;
+  const srcH = imageSource.videoHeight || imageSource.naturalHeight || imageSource.height || 480;
 
+  // Calculate YOLO letterbox scale and neutral padding to preserve true aspect ratio
+  const scale = Math.min(224 / srcW, 224 / srcH);
+  const newW = Math.round(srcW * scale);
+  const newH = Math.round(srcH * scale);
+  const padX = (224 - newW) / 2;
+  const padY = (224 - newH) / 2;
+
+  state.letterbox = { scale, padX, padY, srcW, srcH };
+
+  // Fill neutral gray (114, 114, 114) for letterbox padding
+  offscreenCtx.fillStyle = '#727272';
+  offscreenCtx.fillRect(0, 0, 224, 224);
+  offscreenCtx.drawImage(imageSource, padX, padY, newW, newH);
+
+  const imgData = offscreenCtx.getImageData(0, 0, 224, 224).data;
   const float32Data = new Float32Array(3 * 224 * 224);
   const channelSize = 224 * 224;
 
@@ -396,7 +444,7 @@ async function runInference(sourceElement) {
   const canvasW = DOM.canvas.width;
   const canvasH = DOM.canvas.height;
   const lb = state.letterbox || {
-    scale: 224 / canvasW,
+    scale: Math.min(224 / canvasW, 224 / canvasH),
     padX: 0,
     padY: 0,
   };
@@ -622,6 +670,7 @@ async function renderLoop() {
     if (DOM.video.videoWidth && (DOM.canvas.width !== DOM.video.videoWidth || DOM.canvas.height !== DOM.video.videoHeight)) {
       DOM.canvas.width = DOM.video.videoWidth;
       DOM.canvas.height = DOM.video.videoHeight;
+      adaptViewportToVideo(DOM.video.videoWidth, DOM.video.videoHeight);
     }
 
     try {
@@ -732,6 +781,7 @@ function handleImageUpload(file) {
 
       DOM.canvas.width = img.naturalWidth || 640;
       DOM.canvas.height = img.naturalHeight || 480;
+      adaptViewportToVideo(DOM.canvas.width, DOM.canvas.height);
 
       const ctx = DOM.canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, DOM.canvas.width, DOM.canvas.height);
@@ -755,6 +805,10 @@ function setupEventListeners() {
   });
 
   DOM.stopCamBtn.addEventListener('click', stopCamera);
+
+  if (DOM.flipCamBtn) {
+    DOM.flipCamBtn.addEventListener('click', flipCamera);
+  }
 
   DOM.cameraSelect.addEventListener('change', (e) => {
     if (state.isStreaming) {
