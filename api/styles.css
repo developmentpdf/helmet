@@ -321,6 +321,13 @@ body.dark-theme {
   justify-content: center;
 }
 
+@media (max-width: 768px) {
+  .viewport-wrapper {
+    aspect-ratio: auto;
+    min-height: 360px;
+  }
+}
+
 #webcamVideo {
   display: none;
 }

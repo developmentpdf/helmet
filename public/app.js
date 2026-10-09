@@ -139,8 +139,7 @@ async function loadOnnxModel() {
     // Configure ORT
     ort.env.wasm.numThreads = 1;
     ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
-    ort.env.wasm.simd = true;
-
+    
     let loadedSession = null;
     let successfulPath = '';
 
@@ -618,6 +617,12 @@ async function renderLoop() {
 
   if (DOM.video.readyState >= 2 && !isProcessingFrame) {
     isProcessingFrame = true;
+
+    // Dynamically match canvas resolution to mobile camera feed (handles portrait/landscape rotation)
+    if (DOM.video.videoWidth && (DOM.canvas.width !== DOM.video.videoWidth || DOM.canvas.height !== DOM.video.videoHeight)) {
+      DOM.canvas.width = DOM.video.videoWidth;
+      DOM.canvas.height = DOM.video.videoHeight;
+    }
 
     try {
       const { detections, latency } = await runInference(DOM.video);
