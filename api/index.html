@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SafeGuard AI - Real-Time Helmet Compliance Detection</title>
+  <meta name="description" content="AI-Powered real-time helmet and safety compliance detection using YOLOv8 & ONNX. Deployable on Vercel with live camera feed.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <!-- ONNX Runtime Web for Browser-Native Inference -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+</head>
+<body class="dark-theme">
+  <!-- Background Ambient Glow -->
+  <div class="ambient-glow glow-top-left"></div>
+  <div class="ambient-glow glow-bottom-right"></div>
+
+  <!-- Header / Navigation -->
+  <header class="app-header">
+    <div class="brand-container">
+      <div class="logo-radar">
+        <span class="radar-dot"></span>
+        <svg class="shield-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M9 12l2 2 4-4"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="brand-title">SAFEGUARD <span class="brand-highlight">VISION</span></h1>
+        <p class="brand-subtitle">AI Helmet & PPE Compliance Monitoring</p>
+      </div>
+    </div>
+
+    <div class="header-status-group">
+      <div class="engine-badge" id="engineBadge">
+        <span class="pulse-indicator"></span>
+        <span id="engineBadgeText">Engine: Initializing</span>
+      </div>
+      <div class="system-tag">YOLOv8n / ONNX</div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="dashboard-grid">
+    <!-- Left Column: Video Viewport & Controls -->
+    <section class="viewport-section">
+      <!-- Live Video Card -->
+      <div class="video-card glass-panel">
+        <div class="video-header">
+          <div class="status-pill status-standby" id="statusPill">
+            <span class="status-beacon"></span>
+            <span id="statusPillText">CAMERA STANDBY</span>
+          </div>
+          <div class="fps-badge">
+            <span class="mono-label">FPS:</span>
+            <span class="mono-value" id="fpsDisplay">00.0</span>
+          </div>
+        </div>
+
+        <div class="viewport-wrapper" id="viewportContainer">
+          <!-- Hidden Native Video Stream -->
+          <video id="webcamVideo" autoplay playsinline muted></video>
+          
+          <!-- Interactive Detection Canvas -->
+          <canvas id="outputCanvas"></canvas>
+
+          <!-- Scanning HUD Overlay Animation -->
+          <div class="hud-scanline" id="hudScanline"></div>
+          
+          <!-- Reticle Overlays -->
+          <div class="hud-bracket bracket-tl"></div>
+          <div class="hud-bracket bracket-tr"></div>
+          <div class="hud-bracket bracket-bl"></div>
+          <div class="hud-bracket bracket-br"></div>
+
+          <!-- Loading / Placeholder Overlay -->
+          <div class="viewport-overlay" id="loadingOverlay">
+            <div class="loader-spinner"></div>
+            <h3 id="loaderTitle">Loading Neural Model...</h3>
+            <p id="loaderSubtitle">Downloading YOLOv8 ONNX runtime weights (~11.6 MB)</p>
+            <div class="progress-bar-container">
+              <div class="progress-bar" id="loadProgressBar"></div>
+            </div>
+          </div>
+
+          <!-- Alert Flash Overlay -->
+          <div class="violation-flash" id="violationFlash"></div>
+        </div>
+
+        <!-- Video Control Bar -->
+        <div class="control-toolbar">
+          <div class="tool-left">
+            <button class="btn btn-primary" id="startCamBtn">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+              </svg>
+              <span>Start Camera</span>
+            </button>
+            <button class="btn btn-secondary" id="stopCamBtn" disabled>
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="6" y="6" width="12" height="12"/>
+              </svg>
+              <span>Stop</span>
+            </button>
+            <select class="select-input" id="cameraSelect">
+              <option value="">Default Camera</option>
+            </select>
+          </div>
+
+          <div class="tool-right">
+            <button class="btn btn-icon-only" id="audioToggleBtn" title="Toggle Audio Alarm">
+              <svg id="audioIconOn" class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+              </svg>
+              <svg id="audioIconOff" class="btn-icon hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <line x1="23" y1="9" x2="17" y2="15"/>
+                <line x1="17" y1="9" x2="23" y2="15"/>
+              </svg>
+            </button>
+            <button class="btn btn-icon-only" id="snapshotBtn" title="Capture Snapshot">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Metrics Ribbon -->
+      <div class="metrics-ribbon">
+        <div class="metric-card metric-safe">
+          <div class="metric-icon">✓</div>
+          <div class="metric-info">
+            <span class="metric-number" id="helmetCount">0</span>
+            <span class="metric-title">With Helmet (Safe)</span>
+          </div>
+        </div>
+        <div class="metric-card metric-danger">
+          <div class="metric-icon">!</div>
+          <div class="metric-info">
+            <span class="metric-number" id="violationCount">0</span>
+            <span class="metric-title">Without Helmet (Alert)</span>
+          </div>
+        </div>
+        <div class="metric-card metric-info-card">
+          <div class="metric-icon">⏱</div>
+          <div class="metric-info">
+            <span class="metric-number" id="latencyDisplay">0 ms</span>
+            <span class="metric-title">Inference Latency</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Settings & Safety Incident Log -->
+    <aside class="sidebar-section">
+      <!-- Detection Controls Card -->
+      <div class="sidebar-card glass-panel">
+        <h2 class="sidebar-heading">Configuration & Engine</h2>
+
+        <div class="setting-item">
+          <label class="setting-label" for="engineSelect">Execution Backend</label>
+          <select class="select-input" id="engineSelect">
+            <option value="client" selected>Client Browser (ONNX Web / 60 FPS)</option>
+            <option value="server">Vercel Python API (/api/detect)</option>
+          </select>
+          <span class="setting-hint">Client engine runs zero-latency inference locally. Vercel API routes to Python serverless backend.</span>
+        </div>
+
+        <div class="setting-item">
+          <div class="slider-header">
+            <label class="setting-label" for="confRange">Confidence Threshold</label>
+            <span class="mono-value" id="confValue">45%</span>
+          </div>
+          <input type="range" class="range-slider" id="confRange" min="15" max="90" value="45">
+        </div>
+
+        <div class="setting-item">
+          <div class="slider-header">
+            <label class="setting-label" for="iouRange">NMS IoU Threshold</label>
+            <span class="mono-value" id="iouValue">45%</span>
+          </div>
+          <input type="range" class="range-slider" id="iouRange" min="20" max="80" value="45">
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">Offline Image Test</label>
+          <div class="upload-dropzone" id="dropZone">
+            <input type="file" id="imageFileInput" accept="image/*" class="file-hidden">
+            <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span class="drop-text">Click or drop image to test</span>
+          </div>
+          <button class="btn btn-outline btn-full" id="loadSampleBtn">Test Built-in Sample Image</button>
+        </div>
+      </div>
+
+      <!-- Incident Log Card -->
+      <div class="sidebar-card glass-panel">
+        <div class="incident-header">
+          <h2 class="sidebar-heading">Incident Logs (<span id="incidentTotal">0</span>)</h2>
+          <button class="btn btn-text" id="clearIncidentsBtn">Clear</button>
+        </div>
+        <div class="incident-list" id="incidentList">
+          <div class="empty-state" id="incidentEmpty">
+            <span class="empty-icon">🛡️</span>
+            <p>No safety violations recorded yet. Real-time violations will be automatically logged here.</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Incident Modal Preview -->
+  <div class="modal-backdrop hidden" id="incidentModal">
+    <div class="modal-content glass-panel">
+      <div class="modal-header">
+        <h3 id="modalTitle">Incident Snapshot</h3>
+        <button class="modal-close" id="modalCloseBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <img id="modalImg" src="" alt="Incident Snapshot">
+        <div class="modal-details" id="modalDetails"></div>
+      </div>
+      <div class="modal-footer">
+        <a class="btn btn-primary" id="modalDownloadBtn" download="incident.jpg">Download Image</a>
+      </div>
+    </div>
+  </div>
+
+  <footer class="app-footer">
+    <p>SafeGuard AI Helmet Vision &bull; Dual-Mode YOLOv8 ONNX Engine &bull; Ready for Vercel Deployment</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

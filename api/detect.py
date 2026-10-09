@@ -200,6 +200,24 @@ class handler(BaseHTTPRequestHandler):
         self._set_cors_headers(204)
 
     def do_GET(self):
+        # If request is for root or index.html, serve index.html
+        clean_path = self.path.split("?")[0]
+        if clean_path in ["", "/", "/index.html"]:
+            possible_html_paths = [
+                os.path.join(os.path.dirname(__file__), "..", "index.html"),
+                os.path.join(os.path.dirname(__file__), "index.html"),
+                "index.html",
+            ]
+            for p in possible_html_paths:
+                if os.path.exists(p):
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.end_headers()
+                    with open(p, "rb") as f:
+                        self.wfile.write(f.read())
+                    return
+
+        # Default API health check JSON
         self._set_cors_headers(200)
         res = {
             "status": "online",
