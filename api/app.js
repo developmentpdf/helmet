@@ -23,6 +23,7 @@ const state = {
   },
   audioCtx: null,
   facingMode: 'user',
+  isMirrored: true, // Camera horizontally mirrored
 };
 
 // DOM References
@@ -42,6 +43,7 @@ const DOM = {
   startCamBtn: document.getElementById('startCamBtn'),
   stopCamBtn: document.getElementById('stopCamBtn'),
   flipCamBtn: document.getElementById('flipCamBtn'),
+  mirrorCamBtn: document.getElementById('mirrorCamBtn'),
   cameraSelect: document.getElementById('cameraSelect'),
   audioToggleBtn: document.getElementById('audioToggleBtn'),
   audioIconOn: document.getElementById('audioIconOn'),
@@ -246,8 +248,26 @@ function adaptViewportToVideo(w, h) {
   DOM.viewportContainer.style.aspectRatio = `${w} / ${h}`;
 }
 
+function updateMirrorBtnState() {
+  if (DOM.mirrorCamBtn) {
+    if (state.isMirrored) {
+      DOM.mirrorCamBtn.classList.add('active');
+    } else {
+      DOM.mirrorCamBtn.classList.remove('active');
+    }
+  }
+}
+
+function toggleMirror() {
+  state.isMirrored = !state.isMirrored;
+  updateMirrorBtnState();
+}
+
 async function flipCamera() {
   state.facingMode = state.facingMode === 'user' ? 'environment' : 'user';
+  // Front camera defaults to mirrored selfie view, rear camera to normal view
+  state.isMirrored = (state.facingMode === 'user');
+  updateMirrorBtnState();
   if (state.isStreaming) {
     await startCamera(null, state.facingMode);
   } else {
@@ -542,16 +562,33 @@ async function runServerlessInference(sourceElement, t0) {
 function drawHUD(ctx, detections, frameWidth, frameHeight) {
   ctx.clearRect(0, 0, frameWidth, frameHeight);
 
-  // Draw camera video frame onto canvas
+  // Draw camera video frame onto canvas (mirrored if enabled)
   if (state.isStreaming && DOM.video.readyState >= 2) {
-    ctx.drawImage(DOM.video, 0, 0, frameWidth, frameHeight);
+    if (state.isMirrored) {
+      ctx.save();
+      ctx.translate(frameWidth, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(DOM.video, 0, 0, frameWidth, frameHeight);
+      ctx.restore();
+    } else {
+      ctx.drawImage(DOM.video, 0, 0, frameWidth, frameHeight);
+    }
   }
 
   let helmetCount = 0;
   let violationCount = 0;
 
   detections.forEach((det) => {
-    const [x1, y1, x2, y2] = det.box;
+    let [x1, y1, x2, y2] = det.box;
+
+    // Horizontally flip coordinates if live camera is mirrored
+    if (state.isMirrored && state.isStreaming) {
+      const origX1 = x1;
+      const origX2 = x2;
+      x1 = frameWidth - origX2;
+      x2 = frameWidth - origX1;
+    }
+
     const w = x2 - x1;
     const h = y2 - y1;
     const isSafe = det.clsId === 0;
@@ -808,6 +845,10 @@ function setupEventListeners() {
 
   if (DOM.flipCamBtn) {
     DOM.flipCamBtn.addEventListener('click', flipCamera);
+  }
+
+  if (DOM.mirrorCamBtn) {
+    DOM.mirrorCamBtn.addEventListener('click', toggleMirror);
   }
 
   DOM.cameraSelect.addEventListener('change', (e) => {

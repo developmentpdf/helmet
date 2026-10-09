@@ -36,7 +36,7 @@ def play_alert_sound():
     threading.Thread(target=_beep, daemon=True).start()
 
 
-def draw_hud(frame, helmet_count, no_helmet_count, fps, alert_active, audio_enabled):
+def draw_hud(frame, helmet_count, no_helmet_count, fps, alert_active, audio_enabled, mirror=True):
     """Render futuristic safety HUD and compliance banner."""
     h, w, _ = frame.shape
 
@@ -83,12 +83,14 @@ def draw_hud(frame, helmet_count, no_helmet_count, fps, alert_active, audio_enab
     cv2.rectangle(overlay_bot, (0, bottom_y), (w, h), (20, 20, 20), -1)
     cv2.addWeighted(overlay_bot, 0.85, frame, 0.15, 0, frame)
 
-    # Stats: FPS, Helmets, Violations, Audio Status
+    # Stats: FPS, Helmets, Violations, Audio Status, Mirror Status
     audio_str = "ON" if audio_enabled else "OFF"
+    mirror_str = "ON" if mirror else "OFF"
     stats_str = (
         f"FPS: {fps:.1f}  |  "
         f"With Helmet: {helmet_count}  |  "
         f"Without Helmet: {no_helmet_count}  |  "
+        f"Mirror [M]: {mirror_str}  |  "
         f"Sound [A]: {audio_str}  |  "
         f"Snapshot [S]  |  Quit [Q]"
     )
@@ -97,7 +99,7 @@ def draw_hud(frame, helmet_count, no_helmet_count, fps, alert_active, audio_enab
         stats_str,
         (15, h - 14),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.52,
+        0.48,
         (220, 220, 220),
         1,
         cv2.LINE_AA,
@@ -168,6 +170,7 @@ def run_detector(
     iou_threshold=0.45,
     enable_sound=True,
     save_violations=True,
+    mirror=True,
 ):
     """Run real-time helmet detection on webcam stream."""
     if not os.path.exists(model_path):
@@ -204,7 +207,7 @@ def run_detector(
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-    print("\n[SUCCESS] Webcam active! Press 'q' to quit, 's' to snapshot, 'a' to toggle audio.\n")
+    print("\n[SUCCESS] Webcam active! Press 'q' to quit, 's' to snapshot, 'm' to mirror, 'a' to toggle audio.\n")
 
     # Metrics trackers
     prev_time = time.time()
@@ -219,6 +222,10 @@ def run_detector(
                 print("[WARNING] Empty frame received from camera stream. Retrying...")
                 time.sleep(0.05)
                 continue
+
+            # Mirror / Flip camera horizontally if enabled
+            if mirror:
+                frame = cv2.flip(frame, 1)
 
             current_time = time.time()
             fps_instant = 1.0 / max(1e-5, (current_time - prev_time))
@@ -269,7 +276,7 @@ def run_detector(
                     last_violation_snapshot_time = current_time
 
             # Draw HUD
-            draw_hud(frame, helmet_count, no_helmet_count, fps_smooth, alert_active, enable_sound)
+            draw_hud(frame, helmet_count, no_helmet_count, fps_smooth, alert_active, enable_sound, mirror)
 
             # Display window
             cv2.imshow("Helmet Compliance Detector - OpenCV Live Feed", frame)
@@ -279,6 +286,9 @@ def run_detector(
             if key in [ord('q'), ord('Q'), 27]:  # 27 = ESC
                 print("[INFO] Exiting detection session...")
                 break
+            elif key in [ord('m'), ord('M')]:
+                mirror = not mirror
+                print(f"[INFO] Camera mirror: {'ENABLED' if mirror else 'DISABLED'}")
             elif key in [ord('s'), ord('S')]:
                 # Manual snapshot
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -301,6 +311,7 @@ def main():
     parser.add_argument("--source", type=str, default="0", help="Camera index (0, 1) or path to video file")
     parser.add_argument("--conf", type=float, default=0.30, help="Confidence threshold (0.0 - 1.0)")
     parser.add_argument("--iou", type=float, default=0.45, help="NMS IoU threshold (0.0 - 1.0)")
+    parser.add_argument("--no-mirror", action="store_true", help="Disable horizontal camera mirroring")
     parser.add_argument("--no-sound", action="store_true", help="Disable violation beep sound")
     parser.add_argument("--no-save", action="store_true", help="Disable auto-saving violation snapshots")
     args = parser.parse_args()
@@ -315,6 +326,7 @@ def main():
         iou_threshold=args.iou,
         enable_sound=not args.no_sound,
         save_violations=not args.no_save,
+        mirror=not args.no_mirror,
     )
 
 

@@ -571,6 +571,13 @@ body.dark-theme {
   border-color: rgba(0, 229, 255, 0.3);
 }
 
+.btn-icon-only.active {
+  background: rgba(0, 229, 255, 0.2);
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.35);
+}
+
 .btn-full {
   width: 100%;
 }
