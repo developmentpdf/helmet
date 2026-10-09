@@ -9,7 +9,7 @@ const state = {
   isModelLoaded: false,
   isStreaming: false,
   executionEngine: 'client', // 'client' or 'server'
-  confThreshold: 0.45,
+  confThreshold: 0.28,
   iouThreshold: 0.45,
   audioAlertEnabled: true,
   lastAudioAlertTime: 0,
@@ -393,8 +393,11 @@ async function runInference(sourceElement) {
 
   const canvasW = DOM.canvas.width;
   const canvasH = DOM.canvas.height;
-  const scaleX = canvasW / 224.0;
-  const scaleY = canvasH / 224.0;
+  const lb = state.letterbox || {
+    scale: 224 / canvasW,
+    padX: 0,
+    padY: 0,
+  };
 
   for (let i = 0; i < numAnchors; i++) {
     const cx = data[0 * numAnchors + i];
@@ -407,10 +410,17 @@ async function runInference(sourceElement) {
     const maxScore = Math.max(scoreWith, scoreWithout);
     if (maxScore >= state.confThreshold) {
       const clsId = scoreWithout > scoreWith ? 1 : 0; // 0 = With Helmet, 1 = Without Helmet
-      const x1 = Math.max(0, (cx - w / 2) * scaleX);
-      const y1 = Math.max(0, (cy - h / 2) * scaleY);
-      const x2 = Math.min(canvasW, (cx + w / 2) * scaleX);
-      const y2 = Math.min(canvasH, (cy + h / 2) * scaleY);
+
+      // Unpad coordinates from 224 letterbox space back to original canvas scale
+      const origCx = (cx - lb.padX) / lb.scale;
+      const origCy = (cy - lb.padY) / lb.scale;
+      const origW = w / lb.scale;
+      const origH = h / lb.scale;
+
+      const x1 = Math.max(0, origCx - origW / 2);
+      const y1 = Math.max(0, origCy - origH / 2);
+      const x2 = Math.min(canvasW, origCx + origW / 2);
+      const y2 = Math.min(canvasH, origCy + origH / 2);
 
       candidateBoxes.push([x1, y1, x2, y2]);
       candidateScores.push(maxScore);

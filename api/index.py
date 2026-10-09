@@ -77,8 +77,8 @@ def nms(boxes, scores, iou_thresh=0.45):
     return keep
 
 
-def process_image(image_bytes, conf_thresh=0.45, iou_thresh=0.45):
-    """Run ONNX model inference on input image bytes."""
+def process_image(image_bytes, conf_thresh=0.28, iou_thresh=0.45):
+    """Run ONNX model inference on input image bytes with aspect-ratio letterboxing."""
     t0 = time.time()
     session = get_session()
 
@@ -86,24 +86,25 @@ def process_image(image_bytes, conf_thresh=0.45, iou_thresh=0.45):
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     orig_w, orig_h = img.size
 
-    # Resize to 224x224
-    img_resized = img.resize((224, 224), Image.Resampling.BILINEAR)
-    img_np = np.array(img_resized, dtype=np.float32) / 255.0  # (224, 224, 3)
-    img_np = np.transpose(img_np, (2, 0, 1))  # (3, 224, 224)
-    img_tensor = np.expand_dims(img_np, axis=0)  # (1, 3, 224, 224)
+    # Aspect-ratio preserving letterbox
+    scale = min(224.0 / orig_w, 224.0 / orig_h)
+    new_w = int(orig_w * scale)
+    new_h = int(orig_h * scale)
+    pad_x = (224.0 - new_w) / 2.0
+    pad_y = (224.0 - new_h) / 2.0
+
+    img_resized = img.resize((new_w, new_h), Image.Resampling.BILINEAR)
+    img_lb = Image.new("RGB", (224, 224), (114, 114, 114))
+    img_lb.paste(img_resized, (int(pad_x), int(pad_y)))
+
+    img_np = np.array(img_lb, dtype=np.float32) / 255.0
+    img_np = np.transpose(img_np, (2, 0, 1))
+    img_tensor = np.expand_dims(img_np, axis=0)
 
     # Run inference
     input_name = session.get_inputs()[0].name
     outputs = session.run(None, {input_name: img_tensor})
     raw_out = outputs[0][0]  # shape (6, 1029)
-
-    # raw_out format:
-    # row 0: cx
-    # row 1: cy
-    # row 2: w
-    # row 3: h
-    # row 4: score0 (With Helmet)
-    # row 5: score1 (Without Helmet)
 
     cx = raw_out[0]
     cy = raw_out[1]
@@ -133,20 +134,16 @@ def process_image(image_bytes, conf_thresh=0.45, iou_thresh=0.45):
     valid_scores = max_scores[mask]
     valid_cls = cls_ids[mask]
 
-    # Convert to x1, y1, x2, y2 in original pixel coordinates
-    scale_x = orig_w / 224.0
-    scale_y = orig_h / 224.0
+    # Convert coordinates back from 224 letterbox space to original pixel space
+    orig_cx = (valid_cx - pad_x) / scale
+    orig_cy = (valid_cy - pad_y) / scale
+    orig_box_w = valid_w / scale
+    orig_box_h = valid_h / scale
 
-    x1 = (valid_cx - valid_w / 2.0) * scale_x
-    y1 = (valid_cy - valid_h / 2.0) * scale_y
-    x2 = (valid_cx + valid_w / 2.0) * scale_x
-    y2 = (valid_cy + valid_h / 2.0) * scale_y
-
-    # Clip to image bounds
-    x1 = np.clip(x1, 0, orig_w)
-    y1 = np.clip(y1, 0, orig_h)
-    x2 = np.clip(x2, 0, orig_w)
-    y2 = np.clip(y2, 0, orig_h)
+    x1 = np.clip(orig_cx - orig_box_w / 2.0, 0, orig_w)
+    y1 = np.clip(orig_cy - orig_box_h / 2.0, 0, orig_h)
+    x2 = np.clip(orig_cx + orig_box_w / 2.0, 0, orig_w)
+    y2 = np.clip(orig_cy + orig_box_h / 2.0, 0, orig_h)
 
     boxes = np.stack([x1, y1, x2, y2], axis=1)
 
@@ -170,7 +167,7 @@ def process_image(image_bytes, conf_thresh=0.45, iou_thresh=0.45):
             helmet_count += 1
 
         detections.append({
-            "box": box_coords,  # [x1, y1, x2, y2]
+            "box": box_coords,
             "class_id": c_id,
             "class_name": c_name,
             "confidence": round(score_val, 4),
@@ -183,7 +180,6 @@ def process_image(image_bytes, conf_thresh=0.45, iou_thresh=0.45):
         "image_size": [orig_w, orig_h],
         "inference_time_ms": round((time.time() - t0) * 1000, 2),
     }
-
 
 class handler(BaseHTTPRequestHandler):
     """Vercel Python serverless HTTP request handler."""

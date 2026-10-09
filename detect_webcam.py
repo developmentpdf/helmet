@@ -164,7 +164,7 @@ def draw_detection(frame, box, class_name, confidence):
 def run_detector(
     model_path="helmet_model.pt",
     source=0,
-    conf_threshold=0.45,
+    conf_threshold=0.30,
     iou_threshold=0.45,
     enable_sound=True,
     save_violations=True,
@@ -299,7 +299,7 @@ def main():
     parser = argparse.ArgumentParser(description="Live OpenCV Helmet Detection")
     parser.add_argument("--model", type=str, default="helmet_model.pt", help="Path to YOLO model .pt")
     parser.add_argument("--source", type=str, default="0", help="Camera index (0, 1) or path to video file")
-    parser.add_argument("--conf", type=float, default=0.45, help="Confidence threshold (0.0 - 1.0)")
+    parser.add_argument("--conf", type=float, default=0.30, help="Confidence threshold (0.0 - 1.0)")
     parser.add_argument("--iou", type=float, default=0.45, help="NMS IoU threshold (0.0 - 1.0)")
     parser.add_argument("--no-sound", action="store_true", help="Disable violation beep sound")
     parser.add_argument("--no-save", action="store_true", help="Disable auto-saving violation snapshots")
