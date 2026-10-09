@@ -44,7 +44,7 @@ d:/helmet/
 ├── app.js                    # Web camera, ONNX engine & HUD rendering
 ├── helmet_model.pt           # Trained PyTorch YOLOv8n weights (~6.2 MB)
 ├── helmet_model.onnx         # Root ONNX model weights
-├── requirements.txt          # Full dependencies for local Python environment
+├── requirements-local.txt    # Full dependencies for local OpenCV desktop environment
 ├── vercel.json               # Vercel deployment & routing configuration
 └── README.md
 ```
