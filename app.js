@@ -126,16 +126,19 @@ function playViolationAlarm() {
  */
 async function loadOnnxModel() {
   const modelPaths = [
-    'public/models/helmet_model.onnx',
     'models/helmet_model.onnx',
+    '/models/helmet_model.onnx',
     'helmet_model.onnx',
+    '/helmet_model.onnx',
+    'public/models/helmet_model.onnx',
   ];
 
   try {
     DOM.loadProgressBar.style.width = '30%';
 
     // Configure ORT
-    ort.env.wasm.numThreads = 2;
+    ort.env.wasm.numThreads = 1;
+    ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
     ort.env.wasm.simd = true;
 
     let loadedSession = null;
