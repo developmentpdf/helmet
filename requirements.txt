@@ -1,0 +1,12 @@
+# Helmet Detection Project Requirements
+# Local Environment (OpenCV + Ultralytics YOLO)
+ultralytics>=8.2.0
+opencv-python>=4.9.0
+torch>=2.0.0
+torchvision>=0.15.0
+numpy>=1.24.0
+pillow>=10.0.0
+
+# Optional for ONNX export & web runtime
+onnx>=1.15.0
+onnxruntime>=1.17.0
